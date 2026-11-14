@@ -1,6 +1,8 @@
+#![feature(random)]
+
 use std::fmt::{Display, Formatter};
 use std::ops::Fn;
-
+use std::random::{Rng, SystemRng};
 /*
 RULES:
 - like chess, but king takes variant
@@ -226,10 +228,10 @@ impl Board {
         let other = self.curr_opponent();
 
         [
-            (from & BCD123) << 5,
-            (from & ABC123) << 3,
-            (from & BCD234) >> 3,
-            (from & ABC234) >> 5,
+            (from & ABCD123) << 4,
+            (from & BCD1234) << 1,
+            (from & ABC1234) >> 1,
+            (from & ABCD234) >> 4,
         ]
             .into_iter()
             .map(|pos| pos & !curr.occupied)
@@ -247,10 +249,10 @@ impl Board {
         let other = self.curr_opponent();
 
         [
-            (from & ABCD123) << 4,
-            (from & BCD1234) << 1,
-            (from & ABC1234) >> 1,
-            (from & ABCD234) >> 4,
+            (from & BCD123) << 5,
+            (from & ABC123) << 3,
+            (from & BCD234) >> 3,
+            (from & ABC234) >> 5,
         ]
             .into_iter()
             .map(|pos| pos & !curr.occupied)
@@ -328,11 +330,19 @@ impl Display for Board {
     }
 }
 
+fn select<'a, T>(rng: &mut SystemRng, selection: &'a [T]) -> &'a T {
+    let mut idx = [0u8];
+    rng.fill_bytes(&mut idx);
+    let idx = idx[0] as usize % selection.len();
+    &selection[idx]
+}
+
 fn main() {
+    let mut rng = SystemRng::default();
     let mut board = Board::default();
     while board.detect_winner().is_none() {
         println!("{board}");
-        let selected_move = board.movegen()[0];
+        let selected_move = *select(&mut rng, &board.movegen());
         board = board.apply_move(selected_move);
     }
     println!("{board}");
