@@ -1,8 +1,13 @@
 #![feature(random)]
 
+pub mod strategy;
+
 use std::fmt::{Display, Formatter};
 use std::ops::Fn;
 use std::random::{Rng, SystemRng};
+use crate::strategy::ChessStrategy;
+use crate::strategy::random_move::RandomMoveStrategy;
+use crate::strategy::random_take::RandomTakeStrategy;
 /*
 RULES:
 - like chess, but king takes variant
@@ -46,6 +51,15 @@ pub const ABC123: u16 = 0x0EEE;
 enum Player {
     White,
     Black,
+}
+
+impl Display for Player {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Player::White => write!(f, "White"),
+            Player::Black => write!(f, "Black"),
+        }
+    }
 }
 
 impl Player {
@@ -330,20 +344,25 @@ impl Display for Board {
     }
 }
 
-fn select<'a, T>(rng: &mut SystemRng, selection: &'a [T]) -> &'a T {
-    let mut idx = [0u8];
-    rng.fill_bytes(&mut idx);
-    let idx = idx[0] as usize % selection.len();
-    &selection[idx]
-}
 
 fn main() {
-    let mut rng = SystemRng::default();
+    let mut white_strategy = RandomMoveStrategy::new();
+    let mut black_strategy = RandomTakeStrategy::new();
+
     let mut board = Board::default();
-    while board.detect_winner().is_none() {
+
+    // TODO: check if selected moves are valid
+    loop {
         println!("{board}");
-        let selected_move = *select(&mut rng, &board.movegen());
+        if board.detect_winner().is_some() { break; }
+        let selected_move = white_strategy.select_move(board.clone());
+        board = board.apply_move(selected_move);
+
+        println!("{board}");
+        if board.detect_winner().is_some() { break; }
+        let selected_move = black_strategy.select_move(board.clone());
         board = board.apply_move(selected_move);
     }
-    println!("{board}");
+
+    println!("Winner: {}", board.turn.opponent())
 }
