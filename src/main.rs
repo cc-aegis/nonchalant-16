@@ -47,7 +47,7 @@ enum Player {
 }
 
 impl Player {
-    fn opponent(self) -> Self {
+    const fn opponent(self) -> Self {
         match self {
             Player::White => Player::Black,
             Player::Black => Player::White,
@@ -132,11 +132,31 @@ struct Move {
 }
 
 impl Board {
+    // TODO: detect stalemate if both are somehow gone (this is a king takes variant)
+    fn detect_winner(&self) -> Option<Player> {
+        if self.white.kings == 0 {
+            Some(Player::Black)
+        } else if self.black.kings == 0 {
+            Some(Player::White)
+        } else {
+            None
+        }
+
+    }
+    fn apply_move(&self, m: Move) -> Self {
+        match self.turn {
+            Player::White => self.white_move(m),
+            Player::Black => self.black_move(m),
+        }
+    }
+
     fn white_move(&self, m: Move) -> Self {
         let mut white = self.white;
-        let mut bit_board = white.get(m.kind);
-        *bit_board = (*bit_board & !m.from) | m.to;
         let mut black = self.black;
+
+        white.occupied = (white.occupied & !m.from) | m.to;
+        let bit_board = white.get(m.kind);
+        *bit_board = (*bit_board & !m.from) | m.to;
         if m.takes {
             black.apply(|board| board & !m.to);
         }
@@ -144,10 +164,42 @@ impl Board {
         Board { white, black, occupied: white.occupied | black.occupied, turn: Player::Black }
     }
 
+    fn black_move(&self, m: Move) -> Self {
+        let mut white = self.white;
+        let mut black = self.black;
+
+        black.occupied = (black.occupied & !m.from) | m.to;
+        let bit_board = black.get(m.kind);
+        *bit_board = (*bit_board & !m.from) | m.to;
+        if m.takes {
+            white.apply(|board| board & !m.to);
+        }
+
+        Board { white, black, occupied: white.occupied | black.occupied, turn: Player::White }
+    }
+
+    const fn pieces_by_player(&self, player: Player) -> &Pieces {
+        match player {
+            Player::White => &self.white,
+            Player::Black => &self.black,
+        }
+    }
+
+    const fn curr_player(&self) -> &Pieces {
+        self.pieces_by_player(self.turn)
+    }
+
+    const fn curr_opponent(&self) -> &Pieces {
+        self.pieces_by_player(self.turn.opponent())
+    }
+
     // TODO: const generic color as input
     // TODO: compiler macro for moving (move!(from, (2, -1)))
     // TODO: compiler macro to generate multiple moves
-    fn white_king_moves(&self, from: u16) -> impl Iterator<Item = Move> {
+    fn king_moves(&self, from: u16) -> impl Iterator<Item = Move> {
+        let curr = self.curr_player();
+        let other = self.curr_opponent();
+
         [
             (from & BCD123) << 5,
             (from & ABCD123) << 4,
@@ -159,17 +211,20 @@ impl Board {
             (from & ABC234) >> 5,
         ]
             .into_iter()
-            .map(|pos| pos & !self.white.occupied)
+            .map(|pos| pos & !curr.occupied)
             .filter(|&pos| pos != 0)
             .map(move |to| Move {
                 kind: Piece::King,
                 from,
                 to,
-                takes: (self.black.occupied & to) != 0,
+                takes: (other.occupied & to) != 0,
             })
     }
 
-    fn white_wazir_moves(&self, from: u16) -> impl Iterator<Item = Move> {
+    fn wazir_moves(&self, from: u16) -> impl Iterator<Item = Move> {
+        let curr = self.curr_player();
+        let other = self.curr_opponent();
+
         [
             (from & BCD123) << 5,
             (from & ABC123) << 3,
@@ -177,17 +232,20 @@ impl Board {
             (from & ABC234) >> 5,
         ]
             .into_iter()
-            .map(|pos| pos & !self.white.occupied)
+            .map(|pos| pos & !curr.occupied)
             .filter(|&pos| pos != 0)
             .map(move |to| Move {
-                kind: Piece::Ferz,
+                kind: Piece::Wazir,
                 from,
                 to,
-                takes: (self.black.occupied & to) != 0,
+                takes: (other.occupied & to) != 0,
             })
     }
 
-    fn white_ferz_moves(&self, from: u16) -> impl Iterator<Item = Move> {
+    fn ferz_moves(&self, from: u16) -> impl Iterator<Item = Move> {
+        let curr = self.curr_player();
+        let other = self.curr_opponent();
+
         [
             (from & ABCD123) << 4,
             (from & BCD1234) << 1,
@@ -195,22 +253,24 @@ impl Board {
             (from & ABCD234) >> 4,
         ]
             .into_iter()
-            .map(|pos| pos & !self.white.occupied)
+            .map(|pos| pos & !curr.occupied)
             .filter(|&pos| pos != 0)
             .map(move |to| Move {
-                kind: Piece::Wazir,
+                kind: Piece::Ferz,
                 from,
                 to,
-                takes: (self.black.occupied & to) != 0,
+                takes: (other.occupied & to) != 0,
             })
     }
 
 
-    fn white_movegen(&self) -> Vec<Move> {
+    fn movegen(&self) -> Vec<Move> {
+        let curr = self.curr_player();
+
         let mut moves = Vec::new();
-        moves.extend(self.white.kings.pieces().flat_map(|piece| self.white_king_moves(piece)));
-        moves.extend(self.white.wazirs.pieces().flat_map(|piece| self.white_wazir_moves(piece)));
-        moves.extend(self.white.ferzes.pieces().flat_map(|piece| self.white_ferz_moves(piece)));
+        moves.extend(curr.kings.pieces().flat_map(|piece| self.king_moves(piece)));
+        moves.extend(curr.wazirs.pieces().flat_map(|piece| self.wazir_moves(piece)));
+        moves.extend(curr.ferzes.pieces().flat_map(|piece| self.ferz_moves(piece)));
         moves
     }
 }
@@ -269,9 +329,11 @@ impl Display for Board {
 }
 
 fn main() {
-    let board = Board::default();
-    println!("{board}");
-    let white_move = board.white_movegen()[0];
-    let board = board.white_move(white_move);
+    let mut board = Board::default();
+    while board.detect_winner().is_none() {
+        println!("{board}");
+        let selected_move = board.movegen()[0];
+        board = board.apply_move(selected_move);
+    }
     println!("{board}");
 }
