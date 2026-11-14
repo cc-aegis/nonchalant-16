@@ -40,7 +40,22 @@ pub const BCD123: u16 = 0x0777;
 pub const ABC234: u16 = 0xEEE0;
 pub const ABC123: u16 = 0x0EEE;
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
+enum Player {
+    White,
+    Black,
+}
+
+impl Player {
+    fn opponent(self) -> Self {
+        match self {
+            Player::White => Player::Black,
+            Player::Black => Player::White,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
 enum Piece {
     King,
     Wazir,
@@ -52,7 +67,7 @@ struct Pieces {
     kings: u16,
     wazirs: u16,
     ferzes: u16,
-    taken: u16,
+    occupied: u16,
 }
 
 impl Pieces {
@@ -69,7 +84,7 @@ impl Pieces {
         self.kings = op(self.kings);
         self.wazirs = op(self.wazirs);
         self.ferzes = op(self.ferzes);
-        self.taken = op(self.taken);
+        self.occupied = op(self.occupied);
     }
 }
 
@@ -100,14 +115,15 @@ impl IntoPieceIterator for u16 {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Board {
     white: Pieces,
     black: Pieces,
-    taken: u16,
+    occupied: u16,
+    turn: Player,
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 struct Move {
     kind: Piece,
     from: u16,
@@ -125,7 +141,7 @@ impl Board {
             black.apply(|board| board & !m.to);
         }
 
-        Board { white, black, taken: white.taken | black.taken }
+        Board { white, black, occupied: white.occupied | black.occupied, turn: Player::Black }
     }
 
     // TODO: const generic color as input
@@ -143,22 +159,59 @@ impl Board {
             (from & ABC234) >> 5,
         ]
             .into_iter()
-            .map(|pos| pos & !self.white.taken)
+            .map(|pos| pos & !self.white.occupied)
             .filter(|&pos| pos != 0)
             .map(move |to| Move {
                 kind: Piece::King,
                 from,
                 to,
-                takes: (self.black.taken & to) != 0,
+                takes: (self.black.occupied & to) != 0,
+            })
+    }
+
+    fn white_wazir_moves(&self, from: u16) -> impl Iterator<Item = Move> {
+        [
+            (from & BCD123) << 5,
+            (from & ABC123) << 3,
+            (from & BCD234) >> 3,
+            (from & ABC234) >> 5,
+        ]
+            .into_iter()
+            .map(|pos| pos & !self.white.occupied)
+            .filter(|&pos| pos != 0)
+            .map(move |to| Move {
+                kind: Piece::Ferz,
+                from,
+                to,
+                takes: (self.black.occupied & to) != 0,
+            })
+    }
+
+    fn white_ferz_moves(&self, from: u16) -> impl Iterator<Item = Move> {
+        [
+            (from & ABCD123) << 4,
+            (from & BCD1234) << 1,
+            (from & ABC1234) >> 1,
+            (from & ABCD234) >> 4,
+        ]
+            .into_iter()
+            .map(|pos| pos & !self.white.occupied)
+            .filter(|&pos| pos != 0)
+            .map(move |to| Move {
+                kind: Piece::Wazir,
+                from,
+                to,
+                takes: (self.black.occupied & to) != 0,
             })
     }
 
 
     fn white_movegen(&self) -> Vec<Move> {
-        self.white.kings.pieces()
-            .map(|piece| self.white_king_moves(piece)) // TODO: collect other piece moves
-            .flatten()
-            .collect()
+        let mut moves = Vec::new();
+        moves.extend(self.white.kings.pieces().flat_map(|piece| self.white_king_moves(piece)));
+        moves.extend(self.white.wazirs.pieces().flat_map(|piece| self.white_wazir_moves(piece)));
+        moves.extend(self.white.ferzes.pieces().flat_map(|piece| self.white_ferz_moves(piece)));
+        moves
     }
 }
 
@@ -169,15 +222,16 @@ impl Default for Board {
                 kings: 0x0008,
                 wazirs: 0x0080,
                 ferzes: 0x0004,
-                taken: 0b0000_0000_1000_1100,
+                occupied: 0b0000_0000_1000_1100,
             },
             black: Pieces {
                 kings: 0x1000,
                 wazirs: 0x2000,
                 ferzes: 0x0100,
-                taken: 0b0011_0001_0000_0000,
+                occupied: 0b0011_0001_0000_0000,
             },
-            taken: 0b0011_0001_1000_1100,
+            occupied: 0b0011_0001_1000_1100,
+            turn: Player::White,
         }
     }
 }
@@ -191,25 +245,33 @@ fn bitboard_as_idx(bitboard: u16) -> u8 {
 impl Display for Board {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut grid = ['.'; 16];
-        self.white.kings.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♔');
-        self.white.ferzes.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♗');
-        self.white.wazirs.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♖');
-        self.black.kings.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♚');
-        self.black.ferzes.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♝');
-        self.black.wazirs.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♜');
+        self.white.kings.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♚');
+        self.white.ferzes.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♝');
+        self.white.wazirs.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♜');
+        self.black.kings.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♔');
+        self.black.ferzes.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♗');
+        self.black.wazirs.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♖');
         grid
             .chunks(4)
-            .try_for_each(|chunk| chunk
-                .iter()
-                .try_for_each(|c| write!(f, "{c} "))
-                .and_then(|_| writeln!(f, ""))
+            .enumerate()
+            .try_for_each(|(idx, chunk)| write!(f, "{} | ", 4 - idx)
+                .and_then(|_| chunk
+                    .iter()
+                    .try_for_each(|c| write!(f, "{c} "))
+                    .and_then(|_| writeln!(f, ""))
+                )
             )
+            .and_then(|_| write!(f, "--+--------\n{} | A B C D\n", match self.turn {
+                Player::White => '◆',
+                Player::Black => '◇',
+            }))
     }
 }
 
 fn main() {
     let board = Board::default();
     println!("{board}");
-    dbg!(board.white_king_moves(0x0008).collect::<Vec<Move>>());
-    dbg!(board.white_movegen());
+    let white_move = board.white_movegen()[0];
+    let board = board.white_move(white_move);
+    println!("{board}");
 }
