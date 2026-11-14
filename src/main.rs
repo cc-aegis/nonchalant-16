@@ -5,6 +5,7 @@ pub mod strategy;
 use std::fmt::{Display, Formatter};
 use std::ops::Fn;
 use std::random::{Rng, SystemRng};
+use crate::strategy::avoid_loss::AvoidLossStrategy;
 use crate::strategy::ChessStrategy;
 use crate::strategy::random_move::RandomMoveStrategy;
 use crate::strategy::random_take::RandomTakeStrategy;
@@ -283,6 +284,10 @@ impl Board {
     fn movegen(&self) -> Vec<Move> {
         let curr = self.curr_player();
 
+        if curr.kings.count_ones() == 0 {
+            return Vec::new();
+        }
+
         let mut moves = Vec::new();
         moves.extend(curr.kings.pieces().flat_map(|piece| self.king_moves(piece)));
         moves.extend(curr.wazirs.pieces().flat_map(|piece| self.wazir_moves(piece)));
@@ -296,17 +301,17 @@ impl Default for Board {
         Board {
             white: Pieces {
                 kings: 0x0008,
-                wazirs: 0x0080,
+                wazirs: 0x0002,
                 ferzes: 0x0004,
-                occupied: 0b0000_0000_1000_1100,
+                occupied: 0b0000_0000_0000_1110,
             },
             black: Pieces {
                 kings: 0x1000,
                 wazirs: 0x2000,
-                ferzes: 0x0100,
-                occupied: 0b0011_0001_0000_0000,
+                ferzes: 0x4000,
+                occupied: 0b0111_0000_0000_0000,
             },
-            occupied: 0b0011_0001_1000_1100,
+            occupied: 0b0111_0000_0000_1110,
             turn: Player::White,
         }
     }
@@ -346,8 +351,8 @@ impl Display for Board {
 
 
 fn main() {
-    let mut white_strategy = RandomMoveStrategy::new();
-    let mut black_strategy = RandomTakeStrategy::new();
+    let mut white_strategy = RandomTakeStrategy::new();
+    let mut black_strategy = AvoidLossStrategy::new(3);
 
     let mut board = Board::default();
 

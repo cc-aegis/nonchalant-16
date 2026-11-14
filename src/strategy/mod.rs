@@ -1,5 +1,6 @@
 pub mod random_move;
 pub mod random_take;
+pub mod avoid_loss;
 
 use crate::{Board, Move};
 
