@@ -43,14 +43,14 @@ fn score_after_perfect_sequence(board: &Board, search_depth: u8) -> f32 {
             })
             .collect::<Vec<_>>();
         opponent_moves.sort_by(|(a, _), (b, _)| a.total_cmp(b)); // TODO: use min_by on iterator instead
-        let score = match opponent_moves.last() {
+        let score = match opponent_moves.get(0) {
             Some((_, board)) => score_after_perfect_sequence(board, search_depth - 1),
             None => 1000.0,
         };
         scores.push(score);
     }
 
-    scores.into_iter().min_by(f32::total_cmp).unwrap_or(-1000.0)
+    scores.into_iter().max_by(f32::total_cmp).unwrap_or(-1000.0)
 }
 
 
