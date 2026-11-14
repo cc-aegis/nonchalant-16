@@ -4,7 +4,7 @@ pub mod strategy;
 
 use std::fmt::{Display, Formatter};
 use std::ops::Fn;
-use std::random::{Rng, SystemRng};
+use std::time::Duration;
 use crate::strategy::avoid_loss::AvoidLossStrategy;
 use crate::strategy::ChessStrategy;
 use crate::strategy::random_move::RandomMoveStrategy;
@@ -301,17 +301,17 @@ impl Default for Board {
         Board {
             white: Pieces {
                 kings: 0x0008,
-                wazirs: 0x0002,
-                ferzes: 0x0004,
-                occupied: 0b0000_0000_0000_1110,
+                wazirs: 0x00C0,
+                ferzes: 0x0006,
+                occupied: 0x00CE,
             },
             black: Pieces {
                 kings: 0x1000,
-                wazirs: 0x2000,
-                ferzes: 0x4000,
-                occupied: 0b0111_0000_0000_0000,
+                wazirs: 0x0300,
+                ferzes: 0x6000,
+                occupied: 0x7300,
             },
-            occupied: 0b0111_0000_0000_1110,
+            occupied: 0x73CE,
             turn: Player::White,
         }
     }
@@ -362,11 +362,13 @@ fn main() {
         if board.detect_winner().is_some() { break; }
         let selected_move = white_strategy.select_move(board.clone());
         board = board.apply_move(selected_move);
+        std::thread::sleep(Duration::from_millis(1000));
 
         println!("{board}");
         if board.detect_winner().is_some() { break; }
         let selected_move = black_strategy.select_move(board.clone());
         board = board.apply_move(selected_move);
+        std::thread::sleep(Duration::from_millis(1000));
     }
 
     println!("Winner: {}", board.turn.opponent())
