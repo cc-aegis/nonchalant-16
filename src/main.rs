@@ -17,6 +17,7 @@ PIECES:
 - king
 - wazir: moves one step orthogonally
 - ferz: moves one step diagonally
+- cannon: can move only in its own file, but multiple steps at once
  */
 
 /*
@@ -77,6 +78,7 @@ enum Piece {
     King,
     Wazir,
     Ferz,
+    Cannon,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -84,6 +86,7 @@ struct Pieces {
     kings: u16,
     wazirs: u16,
     ferzes: u16,
+    cannons: u16,
     occupied: u16,
 }
 
@@ -93,6 +96,7 @@ impl Pieces {
             Piece::King => &mut self.kings,
             Piece::Wazir => &mut self.wazirs,
             Piece::Ferz => &mut self.ferzes,
+            Piece::Cannon => &mut self.cannons,
         }
     }
 
@@ -101,6 +105,7 @@ impl Pieces {
         self.kings = op(self.kings);
         self.wazirs = op(self.wazirs);
         self.ferzes = op(self.ferzes);
+        self.cannons = op(self.cannons);
         self.occupied = op(self.occupied);
     }
 }
@@ -280,6 +285,61 @@ impl Board {
             })
     }
 
+    // TODO: use magic bit boards
+    fn cannon_moves(&self, from: u16) -> impl Iterator<Item = Move> {
+        let curr = self.curr_player();
+        let other = self.curr_opponent();
+
+        let mut moves = Vec::new();
+
+        let mut to = from;
+        while (to & ABCD123) != 0 {
+            to <<= 4;
+            if to & curr.occupied != 0 {
+                break;
+            }
+            if to & other.occupied != 0 {
+                moves.push(Move {
+                    kind: Piece::Cannon,
+                    from,
+                    to,
+                    takes: true,
+                });
+                break;
+            }
+            moves.push(Move {
+                kind: Piece::Cannon,
+                from,
+                to,
+                takes: false,
+            });
+        }
+
+        let mut to = from;
+        while (to & ABCD234) != 0 {
+            to >>= 4;
+            if to & curr.occupied != 0 {
+                break;
+            }
+            if to & other.occupied != 0 {
+                moves.push(Move {
+                    kind: Piece::Cannon,
+                    from,
+                    to,
+                    takes: true,
+                });
+                break;
+            }
+            moves.push(Move {
+                kind: Piece::Cannon,
+                from,
+                to,
+                takes: false,
+            });
+        }
+
+        moves.into_iter()
+    }
 
     fn movegen(&self) -> Vec<Move> {
         let curr = self.curr_player();
@@ -292,6 +352,7 @@ impl Board {
         moves.extend(curr.kings.pieces().flat_map(|piece| self.king_moves(piece)));
         moves.extend(curr.wazirs.pieces().flat_map(|piece| self.wazir_moves(piece)));
         moves.extend(curr.ferzes.pieces().flat_map(|piece| self.ferz_moves(piece)));
+        moves.extend(curr.cannons.pieces().flat_map(|piece| self.cannon_moves(piece)));
         moves
     }
 }
@@ -301,14 +362,16 @@ impl Default for Board {
         Board {
             white: Pieces {
                 kings: 0x0008,
-                wazirs: 0x00C0,
-                ferzes: 0x0006,
+                wazirs: 0x0042,
+                ferzes: 0x0080,
+                cannons: 0x0004,
                 occupied: 0x00CE,
             },
             black: Pieces {
                 kings: 0x1000,
-                wazirs: 0x0300,
-                ferzes: 0x6000,
+                wazirs: 0x4200,
+                ferzes: 0x0100,
+                cannons: 0x2000,
                 occupied: 0x7300,
             },
             occupied: 0x73CE,
@@ -329,9 +392,11 @@ impl Display for Board {
         self.white.kings.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♚');
         self.white.ferzes.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♝');
         self.white.wazirs.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♜');
+        self.white.cannons.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♟');
         self.black.kings.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♔');
         self.black.ferzes.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♗');
         self.black.wazirs.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♖');
+        self.black.cannons.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♙');
         grid
             .chunks(4)
             .enumerate()

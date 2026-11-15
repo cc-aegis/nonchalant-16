@@ -58,12 +58,13 @@ fn score_pieces(pieces: &Pieces) -> f32 {
     let kings = pieces.kings.count_ones();
     let wazirs = pieces.wazirs.count_ones();
     let ferzes = pieces.ferzes.count_ones();
+    let cannons = pieces.cannons.count_ones();
     let center_king_penalty = (pieces.kings & 0x6FF6).count_ones() + (pieces.kings & 0x0660).count_ones();
 
     if kings == 0 {
         -1000.0
     } else {
-        (ferzes * 2 + wazirs * 3 + kings * 6) as f32 - (center_king_penalty as f32 * 0.5)
+        (ferzes * 2 + wazirs * 3 + cannons * 4 + kings * 6) as f32 - (center_king_penalty as f32 * 0.5)
     }
 }
 
