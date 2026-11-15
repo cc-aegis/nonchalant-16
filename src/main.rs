@@ -49,7 +49,7 @@ pub const BCD123: u16 = 0x0777;
 pub const ABC234: u16 = 0xEEE0;
 pub const ABC123: u16 = 0x0EEE;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 enum Player {
     White,
     Black,
@@ -81,7 +81,7 @@ enum Piece {
     Cannon,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct Pieces {
     kings: u16,
     wazirs: u16,
@@ -137,7 +137,7 @@ impl IntoPieceIterator for u16 {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct Board {
     white: Pieces,
     black: Pieces,
@@ -433,8 +433,8 @@ impl Display for Board {
 
 
 fn main() {
-    let mut white_strategy = AvoidLossStrategy::new(3);
-    let mut black_strategy = AvoidLossStrategy::new(4);
+    let mut white_strategy = RandomTakeStrategy::new();
+    let mut black_strategy = AvoidLossStrategy::new(6);
 
     let mut board = Board::default();
 
@@ -444,6 +444,7 @@ fn main() {
         if board.detect_winner().is_some() { break; }
         let selected_move = white_strategy.select_move(board.clone());
         board = board.apply_move(selected_move);
+        std::thread::sleep(Duration::from_secs(1));
 
         println!("{board}");
         if board.detect_winner().is_some() { break; }
