@@ -1,3 +1,4 @@
+use std::ops::Sub;
 use crate::{Board, Move, Pieces};
 use crate::strategy::ChessStrategy;
 
@@ -30,27 +31,27 @@ fn score_after_perfect_sequence(board: &Board, search_depth: u8) -> f32 {
         return score_board(board);
     }
 
-    let mut scores = Vec::new();
-
-    for mv in board.movegen() {
-        let board = board.apply_move(mv);
-        let mut opponent_moves = board.movegen()
-            .into_iter()
-            .map(|mv| {
-                let board = board.apply_move(mv);
-                let score = score_after_perfect_sequence(&board, search_depth - 1);
-                (score, board)
-            })
-            .collect::<Vec<_>>();
-        opponent_moves.sort_by(|(a, _), (b, _)| a.total_cmp(b)); // TODO: use min_by on iterator instead
-        let score = match opponent_moves.get(0) {
-            Some((_, board)) => score_after_perfect_sequence(board, search_depth - 1),
-            None => 1000.0,
-        };
-        scores.push(score);
-    }
-
-    scores.into_iter().max_by(f32::total_cmp).unwrap_or(-1000.0) - 0.1 // prefer fast checkmate, long survival
+    board
+        .movegen()
+        .into_iter()
+        .map(|mv| {
+            let board = board.apply_move(mv);
+            let opponent_move = board.movegen()
+                .into_iter()
+                .map(|mv| {
+                    let board = board.apply_move(mv);
+                    let score = score_after_perfect_sequence(&board, search_depth - 1);
+                    (score, board)
+                })
+                .min_by(|(a, _), (b, _)| a.total_cmp(b));
+            match opponent_move {
+                Some((_, board)) => score_after_perfect_sequence(&board, search_depth - 1),
+                None => 1000.0,
+            }
+        })
+        .max_by(f32::total_cmp)
+        .unwrap_or(-1000.0)
+        .sub(0.1) // prefer fast checkmate, long survival
 }
 
 

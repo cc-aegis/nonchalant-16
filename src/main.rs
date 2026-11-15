@@ -348,12 +348,12 @@ impl Board {
             return Vec::new();
         }
 
-        let mut moves = Vec::new();
-        moves.extend(curr.kings.pieces().flat_map(|piece| self.king_moves(piece)));
-        moves.extend(curr.wazirs.pieces().flat_map(|piece| self.wazir_moves(piece)));
-        moves.extend(curr.ferzes.pieces().flat_map(|piece| self.ferz_moves(piece)));
-        moves.extend(curr.cannons.pieces().flat_map(|piece| self.cannon_moves(piece)));
-        moves
+        let king_moves = curr.kings.pieces().flat_map(|piece| self.king_moves(piece));
+        let wazir_moves = curr.wazirs.pieces().flat_map(|piece| self.wazir_moves(piece));
+        let ferz_moves = curr.ferzes.pieces().flat_map(|piece| self.ferz_moves(piece));
+        let cannon_moves = curr.cannons.pieces().flat_map(|piece| self.cannon_moves(piece));
+
+        king_moves.chain(wazir_moves).chain(ferz_moves).chain(cannon_moves).collect()
     }
 }
 
@@ -417,7 +417,7 @@ impl Display for Board {
 
 fn main() {
     let mut white_strategy = RandomTakeStrategy::new();
-    let mut black_strategy = AvoidLossStrategy::new(3);
+    let mut black_strategy = AvoidLossStrategy::new(4);
 
     let mut board = Board::default();
 
