@@ -50,7 +50,7 @@ fn score_after_perfect_sequence(board: &Board, search_depth: u8) -> f32 {
         scores.push(score);
     }
 
-    scores.into_iter().max_by(f32::total_cmp).unwrap_or(-1000.0)
+    scores.into_iter().max_by(f32::total_cmp).unwrap_or(-1000.0) - 0.1 // prefer fast checkmate, long survival
 }
 
 
@@ -60,11 +60,14 @@ fn score_pieces(pieces: &Pieces) -> f32 {
     let ferzes = pieces.ferzes.count_ones();
     let cannons = pieces.cannons.count_ones();
     let center_king_penalty = (pieces.kings & 0x6FF6).count_ones() + (pieces.kings & 0x0660).count_ones();
+    let center_piece_bonus = ((pieces.wazirs | pieces.ferzes) & 0x0660).count_ones();
 
     if kings == 0 {
         -1000.0
     } else {
-        (ferzes * 2 + wazirs * 3 + cannons * 4 + kings * 6) as f32 - (center_king_penalty as f32 * 0.5)
+        (ferzes * 2 + wazirs * 3 + cannons * 4 + kings * 6) as f32
+            + (center_piece_bonus as f32 * 0.3)
+            - (center_king_penalty as f32 * 0.5)
     }
 }
 
