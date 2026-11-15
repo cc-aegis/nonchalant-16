@@ -433,7 +433,7 @@ impl Display for Board {
 
 
 fn main() {
-    let mut white_strategy = RandomTakeStrategy::new();
+    let mut white_strategy = AvoidLossStrategy::new(3);
     let mut black_strategy = AvoidLossStrategy::new(4);
 
     let mut board = Board::default();
@@ -444,13 +444,11 @@ fn main() {
         if board.detect_winner().is_some() { break; }
         let selected_move = white_strategy.select_move(board.clone());
         board = board.apply_move(selected_move);
-        std::thread::sleep(Duration::from_millis(1000));
 
         println!("{board}");
         if board.detect_winner().is_some() { break; }
         let selected_move = black_strategy.select_move(board.clone());
         board = board.apply_move(selected_move);
-        std::thread::sleep(Duration::from_millis(1000));
     }
 
     println!("Winner: {}", board.turn.opponent())

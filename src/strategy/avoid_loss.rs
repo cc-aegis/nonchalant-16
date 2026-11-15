@@ -1,4 +1,6 @@
 use std::ops::Sub;
+use rayon::prelude::IntoParallelIterator;
+use rayon::iter::ParallelIterator;
 use crate::{Board, Move, Pieces};
 use crate::strategy::ChessStrategy;
 
@@ -13,7 +15,8 @@ impl AvoidLossStrategy {
 impl ChessStrategy for AvoidLossStrategy {
     fn select_move(&mut self, board: Board) -> Move {
         board
-            .movegen_iter()
+            .movegen()
+            .into_par_iter()
             .map(|mv| {
                 let board = board.apply_move(mv);
                 let opponent_score = score_after_perfect_sequence(&board, self.0);
