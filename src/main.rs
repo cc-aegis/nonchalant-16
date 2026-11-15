@@ -344,7 +344,7 @@ impl Board {
     fn movegen(&self) -> Vec<Move> {
         let curr = self.curr_player();
 
-        if curr.kings.count_ones() == 0 {
+        if curr.kings == 0 {
             return Vec::new();
         }
 
@@ -354,6 +354,23 @@ impl Board {
         let cannon_moves = curr.cannons.pieces().flat_map(|piece| self.cannon_moves(piece));
 
         king_moves.chain(wazir_moves).chain(ferz_moves).chain(cannon_moves).collect()
+    }
+
+    fn movegen_iter(&self) -> impl Iterator<Item = Move> {
+        let curr = self.curr_player();
+
+        curr.kings
+            .ne(&0)
+            .then(|| {
+                let king_moves = curr.kings.pieces().flat_map(|piece| self.king_moves(piece));
+                let wazir_moves = curr.wazirs.pieces().flat_map(|piece| self.wazir_moves(piece));
+                let ferz_moves = curr.ferzes.pieces().flat_map(|piece| self.ferz_moves(piece));
+                let cannon_moves = curr.cannons.pieces().flat_map(|piece| self.cannon_moves(piece));
+
+                king_moves.chain(wazir_moves).chain(ferz_moves).chain(cannon_moves)
+            })
+            .into_iter()
+            .flatten()
     }
 }
 

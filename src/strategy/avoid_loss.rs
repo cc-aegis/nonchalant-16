@@ -13,8 +13,7 @@ impl AvoidLossStrategy {
 impl ChessStrategy for AvoidLossStrategy {
     fn select_move(&mut self, board: Board) -> Move {
         board
-            .movegen()
-            .into_iter()
+            .movegen_iter()
             .map(|mv| {
                 let board = board.apply_move(mv);
                 let opponent_score = score_after_perfect_sequence(&board, self.0);
@@ -32,12 +31,10 @@ fn score_after_perfect_sequence(board: &Board, search_depth: u8) -> f32 {
     }
 
     board
-        .movegen()
-        .into_iter()
+        .movegen_iter()
         .map(|mv| {
             let board = board.apply_move(mv);
-            let opponent_move = board.movegen()
-                .into_iter()
+            let opponent_move = board.movegen_iter()
                 .map(|mv| {
                     let board = board.apply_move(mv);
                     let score = score_after_perfect_sequence(&board, search_depth - 1);
