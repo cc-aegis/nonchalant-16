@@ -49,6 +49,42 @@ pub const BCD123: u16 = 0x0777;
 pub const ABC234: u16 = 0xEEE0;
 pub const ABC123: u16 = 0x0EEE;
 
+const BCD12: u16 = 0x0077;
+const BCD34: u16 = 0x7700;
+const ABC12: u16 = 0x00EE;
+const ABC34: u16 = 0xEE00;
+const AB234: u16 = 0xCCC0;
+const AB123: u16 = 0x0CCC;
+const CD234: u16 = 0x3330;
+const CD123: u16 = 0x0333;
+
+macro_rules! move_piece {
+    ($piece:expr, up $y:expr, left $x:expr) => {
+        $piece << const { ($y << 2) + $x }
+    };
+    ($piece:expr, up $y:expr, right $x:expr) => {
+        $piece << const { ($y << 2) - $x }
+    };
+    ($piece:expr, down $y:expr, left $x:expr) => {
+        $piece >> const { ($y << 2) - $x }
+    };
+    ($piece:expr, down $y:expr, right $x:expr) => {
+        $piece >> const { ($y << 2) + $x }
+    };
+    ($piece:expr, up $y:expr) => {
+        $piece << const { $y << 2 }
+    };
+    ($piece:expr, down $y:expr) => {
+        $piece >> const { $y << 2 }
+    };
+    ($piece:expr, left $x:expr) => {
+        $piece << $y
+    };
+    ($piece:expr, right $x:expr) => {
+        $piece >> $x
+    };
+}
+
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 enum Player {
     White,
@@ -78,6 +114,7 @@ enum Piece {
     King,
     Wazir,
     Ferz,
+    Knight,
     Cannon,
 }
 
@@ -86,16 +123,19 @@ struct Pieces {
     kings: u16,
     wazirs: u16,
     ferzes: u16,
+    knights: u16,
     cannons: u16,
     occupied: u16,
 }
 
 impl Pieces {
-    fn get(&mut self, kind: Piece) -> &mut u16 {
+    #[inline(always)]
+    const fn get(&mut self, kind: Piece) -> &mut u16 {
         match kind {
             Piece::King => &mut self.kings,
             Piece::Wazir => &mut self.wazirs,
             Piece::Ferz => &mut self.ferzes,
+            Piece::Knight => &mut self.knights,
             Piece::Cannon => &mut self.cannons,
         }
     }
@@ -105,6 +145,7 @@ impl Pieces {
         self.kings = op(self.kings);
         self.wazirs = op(self.wazirs);
         self.ferzes = op(self.ferzes);
+        self.knights = op(self.knights);
         self.cannons = op(self.cannons);
         self.occupied = op(self.occupied);
     }
@@ -285,6 +326,31 @@ impl Board {
             })
     }
 
+   fn knight_moves(&self, from: u16) -> impl Iterator<Item = Move> {
+        let curr = self.curr_player();
+        let other = self.curr_opponent();
+
+       [
+           move_piece!(from & BCD12, up 2, left 1),
+           move_piece!(from & ABC12, up 2, right 1),
+           move_piece!(from & BCD34, down 2, left 1),
+           move_piece!(from & ABC34, down 2, right 1),
+           move_piece!(from & CD123, up 1, left 2),
+           move_piece!(from & AB123, up 1, right 2),
+           move_piece!(from & CD234, down 1, left 2),
+           move_piece!(from & AB234, down 1, right 2),
+       ]
+            .into_iter()
+            .map(|pos| pos & !curr.occupied)
+            .filter(|&pos| pos != 0)
+            .map(move |to| Move {
+                kind: Piece::Knight,
+                from,
+                to,
+                takes: (other.occupied & to) != 0,
+            })
+    }
+
     // TODO: use magic bit boards
     fn cannon_moves(&self, from: u16) -> impl Iterator<Item = Move> {
         let curr = self.curr_player();
@@ -351,9 +417,10 @@ impl Board {
         let king_moves = curr.kings.pieces().flat_map(|piece| self.king_moves(piece));
         let wazir_moves = curr.wazirs.pieces().flat_map(|piece| self.wazir_moves(piece));
         let ferz_moves = curr.ferzes.pieces().flat_map(|piece| self.ferz_moves(piece));
+        let knight_moves = curr.knights.pieces().flat_map(|piece| self.knight_moves(piece));
         let cannon_moves = curr.cannons.pieces().flat_map(|piece| self.cannon_moves(piece));
 
-        king_moves.chain(wazir_moves).chain(ferz_moves).chain(cannon_moves).collect()
+        king_moves.chain(wazir_moves).chain(ferz_moves).chain(knight_moves).chain(cannon_moves).collect()
     }
 
     fn movegen_iter(&self) -> impl Iterator<Item = Move> {
@@ -365,9 +432,10 @@ impl Board {
                 let king_moves = curr.kings.pieces().flat_map(|piece| self.king_moves(piece));
                 let wazir_moves = curr.wazirs.pieces().flat_map(|piece| self.wazir_moves(piece));
                 let ferz_moves = curr.ferzes.pieces().flat_map(|piece| self.ferz_moves(piece));
+                let knight_moves = curr.knights.pieces().flat_map(|piece| self.knight_moves(piece));
                 let cannon_moves = curr.cannons.pieces().flat_map(|piece| self.cannon_moves(piece));
 
-                king_moves.chain(wazir_moves).chain(ferz_moves).chain(cannon_moves)
+                king_moves.chain(wazir_moves).chain(ferz_moves).chain(knight_moves).chain(cannon_moves)
             })
             .into_iter()
             .flatten()
@@ -378,20 +446,22 @@ impl Default for Board {
     fn default() -> Self {
         Board {
             white: Pieces {
-                kings: 0x0008,
-                wazirs: 0x0042,
+                kings: 0x0004,
+                wazirs: 0x0040,
                 ferzes: 0x0080,
-                cannons: 0x0004,
-                occupied: 0x00CE,
+                knights: 0x000B,
+                cannons: 0x0000,
+                occupied: 0x00CF,
             },
             black: Pieces {
-                kings: 0x1000,
-                wazirs: 0x4200,
+                kings: 0x2000,
+                wazirs: 0x0200,
                 ferzes: 0x0100,
-                cannons: 0x2000,
-                occupied: 0x7300,
+                knights: 0xD000,
+                cannons: 0x0000,
+                occupied: 0xF300,
             },
-            occupied: 0x73CE,
+            occupied: 0xF3CF,
             turn: Player::White,
         }
     }
@@ -409,9 +479,11 @@ impl Display for Board {
         self.white.kings.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♚');
         self.white.ferzes.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♝');
         self.white.wazirs.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♜');
+        self.white.knights.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♞');
         self.white.cannons.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♟');
         self.black.kings.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♔');
         self.black.ferzes.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♗');
+        self.black.knights.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♘');
         self.black.wazirs.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♖');
         self.black.cannons.pieces().for_each(|piece| grid[bitboard_as_idx(piece) as usize] = '♙');
         grid
@@ -433,8 +505,8 @@ impl Display for Board {
 
 
 fn main() {
-    let mut white_strategy = RandomTakeStrategy::new();
-    let mut black_strategy = AvoidLossStrategy::new(6);
+    let mut white_strategy = RandomMoveStrategy::new();
+    let mut black_strategy = AvoidLossStrategy::new(3);
 
     let mut board = Board::default();
 
@@ -450,6 +522,7 @@ fn main() {
         if board.detect_winner().is_some() { break; }
         let selected_move = black_strategy.select_move(board.clone());
         board = board.apply_move(selected_move);
+        std::thread::sleep(Duration::from_secs(1));
     }
 
     println!("Winner: {}", board.turn.opponent())
